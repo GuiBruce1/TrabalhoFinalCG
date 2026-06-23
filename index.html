@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Terreno Procedimental + Grama — WebGL 2 Nativo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #111;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    /* ---- HUD Panel (glassmorphism) ---- */
+    #hud {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      width: 290px;
+      background: rgba(10, 10, 18, 0.72);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 14px 16px;
+      color: #ddd;
+      font-size: 12px;
+      pointer-events: none;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+      user-select: none;
+    }
+
+    #hud>* {
+      pointer-events: auto;
+    }
+
+    /* FPS badge */
+    #fps {
+      font-weight: 700;
+      font-size: 13px;
+      color: #66ffaa;
+      letter-spacing: 0.5px;
+      margin-bottom: 10px;
+    }
+
+    /* Section headers */
+    .section-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.35);
+      margin-top: 12px;
+      margin-bottom: 6px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 10px;
+    }
+
+    .section-title:first-of-type {
+      border-top: none;
+      margin-top: 4px;
+    }
+
+    /* Toggle badges */
+    .toggle-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+      font-size: 11.5px;
+    }
+
+    .toggle-row .badge {
+      display: inline-block;
+      padding: 1px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .badge-on {
+      background: rgba(100, 255, 160, 0.18);
+      color: #66ffaa;
+    }
+
+    .badge-off {
+      background: rgba(255, 100, 100, 0.15);
+      color: #ff8888;
+    }
+
+    /* Slider rows */
+    .ctrl {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+
+    .ctrl label {
+      min-width: 110px;
+      font-size: 11.5px;
+      color: #bbb;
+    }
+
+    .ctrl input[type=range] {
+      flex: 1;
+      height: 4px;
+      cursor: pointer;
+      accent-color: #6ea8fe;
+      -webkit-appearance: none;
+      appearance: none;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    .ctrl input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #6ea8fe;
+      cursor: pointer;
+    }
+
+    /* Color picker rows */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .color-row label {
+      flex: 1;
+      font-size: 11px;
+      color: #aaa;
+    }
+
+    .color-row input[type=color] {
+      width: 28px;
+      height: 22px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 4px;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .color-row input[type=color]::-webkit-color-swatch-wrapper {
+      padding: 1px;
+    }
+
+    .color-row input[type=color]::-webkit-color-swatch {
+      border-radius: 3px;
+      border: none;
+    }
+
+    /* Terrain color toggle button */
+    .toggle-btn {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: #ccc;
+      font-family: inherit;
+      font-size: 11px;
+      font-weight: 500;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-align: left;
+      width: 100%;
+      margin-bottom: 6px;
+      transition: background 0.15s, border-color 0.15s;
+    }
+
+    .toggle-btn:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    /* Terrain color panel (hidden by default) */
+    #terrainColorPanel {
+      display: none;
+      flex-direction: column;
+      gap: 3px;
+      padding: 6px 0 2px 0;
+    }
+
+    /* ---- Help hint ---- */
+    #help {
+      position: fixed;
+      bottom: 12px;
+      left: 12px;
+      color: rgba(255, 255, 255, 0.35);
+      font-size: 10.5px;
+      font-family: 'Inter', 'Segoe UI', sans-serif;
+      letter-spacing: 0.2px;
+    }
+  </style>
+</head>
+
+<body>
+  <canvas id="glCanvas"></canvas>
+
+  <div id="hud">
+    <!-- Performance -->
+    <span id="fps">FPS: --</span>
+
+    <!-- Toggles -->
+    <div class="section-title">Visualização</div>
+    <div class="toggle-row">
+      <span>Grama</span>
+      <span id="grassLabel" class="badge badge-on">SIM</span>
+    </div>
+
+    <!-- Terrain controls -->
+    <div class="section-title">Terreno</div>
+    <div class="ctrl">
+      <label id="heightLabel">Altura: 500</label>
+      <input type="range" id="heightSlider" min="250" max="1000" value="40" step="1">
+    </div>
+    <div class="ctrl">
+      <label id="frequencyLabel">Frequência: 5</label>
+      <input type="range" id="frequencySlider" min="1" max="20" value="5" step="1">
+    </div>
+
+    <!-- Water controls -->
+    <div class="section-title">Água</div>
+    <div class="ctrl">
+      <label id="waterLabel">Nível da Água: 0</label>
+      <input type="range" id="waterSlider" min="-50" max="50" value="0" step="1">
+    </div>
+    <div class="ctrl">
+      <label id="waterHeightLabel">Zona do Litoral: 5</label>
+      <input type="range" id="waterHeightSlider" min="1" max="20" value="5" step="1">
+    </div>
+
+    <!-- Grass color controls -->
+    <div class="section-title">Cores da Grama</div>
+    <div class="color-row">
+      <label>Base</label>
+      <input type="color" id="grassBaseColorPicker" value="#00bf00">
+    </div>
+    <div class="color-row">
+      <label>Ponta</label>
+      <input type="color" id="grassTipColorPicker" value="#ffff00">
+    </div>
+
+    <!-- Terrain gradient color picker (collapsible) -->
+    <div class="section-title">Gradiente do Terreno</div>
+    <button id="terrainColorToggle" class="toggle-btn">▶ Cores do Terreno</button>
+    <div id="terrainColorPanel">
+      <div class="color-row">
+        <label>Areia Escura</label>
+        <input type="color" id="tSandDark" value="#99875c">
+      </div>
+      <div class="color-row">
+        <label>Areia</label>
+        <input type="color" id="tSand" value="#c2b380">
+      </div>
+      <div class="color-row">
+        <label>Vale</label>
+        <input type="color" id="tValley" value="#1f5914">
+      </div>
+      <div class="color-row">
+        <label>Colina</label>
+        <input type="color" id="tHill" value="#4d852e">
+      </div>
+      <div class="color-row">
+        <label>Rocha</label>
+        <input type="color" id="tRock" value="#8c7a61">
+      </div>
+      <div class="color-row">
+        <label>Topo / Neve</label>
+        <input type="color" id="tSnow" value="#bfb8a6">
+      </div>
+    </div>
+  </div>
+
+  <div id="help">
+    Arrastar: orbitar &nbsp;|&nbsp; Scroll: zoom &nbsp;|&nbsp; G: grama
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+
+</html>
